@@ -45,6 +45,12 @@ const logSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 const Log = mongoose.model('Log', logSchema);
 
+// Open Route
+app.get("/", (req, res) => {
+  res.status(200).json({ message: "Bem vindo a api" });
+});
+
+
 app.post('/register', async (req, res) => {
   const { username, email, password, city } = req.body;
   console.log('Register request received:', { username, email, password, city });
