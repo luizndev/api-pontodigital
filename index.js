@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const xlsx = require('xlsx');
+const bcrypt = require('bcrypt');
 
 dotenv.config();
 
@@ -18,6 +19,10 @@ mongoose.connect(
   `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASS}@${process.env.MONGO_CLUSTER_URL}/${process.env.MONGO_DATABASE}?retryWrites=true&w=majority`
 );
 
+mongoose.connection.on('error', (err) => {
+  console.error('MongoDB connection error:', err);
+});
+
 // Definindo o modelo de Usuário
 const userSchema = new mongoose.Schema({
   username: String,
@@ -25,7 +30,9 @@ const userSchema = new mongoose.Schema({
   password: String,
   city: String,
   disciplinas: Array,
-  role: String
+  role: String,
+  cargo: String,
+  curso: String
 });
 
 const logSchema = new mongoose.Schema({
@@ -50,7 +57,6 @@ app.get("/", (req, res) => {
   res.status(200).json({ message: "Bem vindo a api" });
 });
 
-
 app.post('/register', async (req, res) => {
   const { username, email, password, city } = req.body;
   console.log('Register request received:', { username, email, password, city });
@@ -65,8 +71,9 @@ app.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'Usuário já existe!' });
     }
 
+    const hashedPassword = await bcrypt.hash(password, 10);
     const role = (await User.countDocuments()) === 0 ? 'admin' : 'user';
-    const newUser = new User({ username, email, password, city, disciplinas: [], role });
+    const newUser = new User({ username, email, password: hashedPassword, city, disciplinas: [], role });
     await newUser.save();
 
     const token = jwt.sign({ username, email, role }, process.env.JWT_SECRET, { expiresIn: '1h' });
@@ -74,10 +81,9 @@ app.post('/register', async (req, res) => {
     res.status(201).json({ token });
   } catch (error) {
     console.error('Register error:', error);
-    res.status(500).json({ message: 'Erro no servidor', error });
+    res.status(500).json({ message: 'Erro no servidor', error: error.message });
   }
 });
-
 
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
@@ -89,21 +95,19 @@ app.post('/login', async (req, res) => {
       return res.status(401).json({ message: 'Credenciais inválidas!' });
     }
 
-    // Aqui você deve comparar a senha fornecida com o hash armazenado
-    // const passwordMatch = await bcrypt.compare(password, user.password);
-    // if (!passwordMatch) {
-    //   return res.status(401).json({ message: 'Credenciais inválidas!' });
-    // }
+    const passwordMatch = await bcrypt.compare(password, user.password);
+    if (!passwordMatch) {
+      return res.status(401).json({ message: 'Credenciais inválidas!' });
+    }
 
     const token = jwt.sign({ email: user.email, role: user.role }, process.env.JWT_SECRET, { expiresIn: '1h' });
 
     res.status(200).json({ token });
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ message: 'Erro no servidor', error });
+    res.status(500).json({ message: 'Erro no servidor', error: error.message });
   }
 });
-
 
 // Atualizar usuário
 app.put('/user', async (req, res) => {
@@ -123,7 +127,7 @@ app.put('/user', async (req, res) => {
 
     res.status(200).json({ message: 'Informações do usuário atualizadas com sucesso!', user });
   } catch (error) {
-    res.status(500).json({ message: 'Erro no servidor', error });
+    res.status(500).json({ message: 'Erro no servidor', error: error.message });
   }
 });
 
@@ -143,7 +147,7 @@ app.get('/disciplinas', async (req, res) => {
 
     res.status(200).json(user.disciplinas);
   } catch (error) {
-    res.status(500).json({ message: 'Erro no servidor', error });
+    res.status(500).json({ message: 'Erro no servidor', error: error.message });
   }
 });
 
@@ -202,7 +206,7 @@ app.get('/extrair-relatorio', async (req, res) => {
 
     res.send(buffer);
   } catch (error) {
-    res.status(500).json({ message: 'Erro ao gerar relatório', error });
+    res.status(500).json({ message: 'Erro ao gerar relatório', error: error.message });
   }
 });
 
