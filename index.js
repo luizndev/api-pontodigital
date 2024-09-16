@@ -6,20 +6,27 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const xlsx = require('xlsx');
 const bcrypt = require('bcrypt');
-require("dotenv").config();
 
 dotenv.config();
 
 const app = express();
-const port = 80 || 5000;
+const port = process.env.PORT || 5000;
 
-app.use(cors());
+// Configuração do CORS
+const corsOptions = {
+  origin: 'https://pontodigital-cogna.vercel.app', // Permitir apenas esse domínio
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
-mongoose.connect(
-  `mongodb+srv://luisflc582:Eduardo54321
-@cluster0.8zd2dbs.mongodb.net/pontodigital?retryWrites=true&w=majority`
-);
+// Conexão com o MongoDB
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+});
 
 mongoose.connection.on('error', (err) => {
   console.error('MongoDB connection error:', err);
@@ -54,11 +61,12 @@ const logSchema = new mongoose.Schema({
 const User = mongoose.model('User', userSchema);
 const Log = mongoose.model('Log', logSchema);
 
-// Open Route
+// Rota de boas-vindas
 app.get("/", (req, res) => {
-  res.status(200).json({ message: "Bem vindo a api" });
+  res.status(200).json({ message: "Bem-vindo à API" });
 });
 
+// Rota de registro
 app.post('/register', async (req, res) => {
   const { username, email, password, city } = req.body;
   console.log('Register request received:', { username, email, password, city });
@@ -87,6 +95,7 @@ app.post('/register', async (req, res) => {
   }
 });
 
+// Rota de login
 app.post('/login', async (req, res) => {
   const { email, password } = req.body;
   console.log('Login request received:', { email, password });
@@ -111,7 +120,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Atualizar usuário
+// Atualizar informações do usuário
 app.put('/user', async (req, res) => {
   const { email, cargo, curso, city } = req.body;
 
@@ -129,6 +138,7 @@ app.put('/user', async (req, res) => {
 
     res.status(200).json({ message: 'Informações do usuário atualizadas com sucesso!', user });
   } catch (error) {
+    console.error('Update user error:', error);
     res.status(500).json({ message: 'Erro no servidor', error: error.message });
   }
 });
@@ -149,6 +159,7 @@ app.get('/disciplinas', async (req, res) => {
 
     res.status(200).json(user.disciplinas);
   } catch (error) {
+    console.error('Get disciplinas error:', error);
     res.status(500).json({ message: 'Erro no servidor', error: error.message });
   }
 });
@@ -208,6 +219,7 @@ app.get('/extrair-relatorio', async (req, res) => {
 
     res.send(buffer);
   } catch (error) {
+    console.error('Generate report error:', error);
     res.status(500).json({ message: 'Erro ao gerar relatório', error: error.message });
   }
 });
