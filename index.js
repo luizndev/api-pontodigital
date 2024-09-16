@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const xlsx = require('xlsx');
 const bcrypt = require('bcrypt');
+require("dotenv").config();
 
 dotenv.config();
 
