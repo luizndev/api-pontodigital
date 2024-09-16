@@ -19,6 +19,13 @@ mongoose.connect(
   `mongodb+srv://${process.env.MONGO_USER}:${process.env.MONGO_PASS}@${process.env.MONGO_CLUSTER_URL}/${process.env.MONGO_DATABASE}?retryWrites=true&w=majority`
 );
 
+mongoose.connection.on('connected', () => {
+  console.log('Mongoose connected');
+});
+mongoose.connection.on('disconnected', () => {
+  console.log('Mongoose disconnected');
+});
+
 mongoose.connection.on('error', (err) => {
   console.error('MongoDB connection error:', err);
 });
