@@ -17,6 +17,7 @@ const corsOptions = {
   origin: 'https://pontodigital-cogna.vercel.app', // Permitir apenas esse domínio
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true, // Adicionar essa linha se você estiver enviando cookies ou credenciais
 };
 
 app.use(cors(corsOptions));
@@ -25,7 +26,7 @@ app.use(bodyParser.json());
 // Conexão com o MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
-  useUnifiedTopology: true
+  useUnifiedTopology: true,
 });
 
 mongoose.connection.on('error', (err) => {
@@ -41,7 +42,7 @@ const userSchema = new mongoose.Schema({
   disciplinas: Array,
   role: String,
   cargo: String,
-  curso: String
+  curso: String,
 });
 
 const logSchema = new mongoose.Schema({
@@ -55,7 +56,7 @@ const logSchema = new mongoose.Schema({
   horario_fim: String,
   status: String,
   duracao: String,
-  timestamp: String
+  timestamp: String,
 });
 
 const User = mongoose.model('User', userSchema);
