@@ -14,10 +14,10 @@ const port = process.env.PORT || 5000;
 
 // Configuração do CORS
 const corsOptions = {
-  origin: 'https://pontodigital-cogna.vercel.app', // Permitir apenas esse domínio
+  origin: 'https://pontodigital-cogna.vercel.app',
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true, // Adicionar essa linha se você estiver enviando cookies ou credenciais
+  credentials: true,
 };
 
 app.use(cors(corsOptions));
@@ -27,11 +27,9 @@ app.use(bodyParser.json());
 mongoose.connect(process.env.MONGODB_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-});
-
-mongoose.connection.on('error', (err) => {
-  console.error('MongoDB connection error:', err);
-});
+})
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
 // Definindo o modelo de Usuário
 const userSchema = new mongoose.Schema({
