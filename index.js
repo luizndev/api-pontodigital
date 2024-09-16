@@ -1,4 +1,5 @@
 const express = require('express');
+const app = express();
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
@@ -9,7 +10,6 @@ const bcrypt = require('bcrypt');
 
 dotenv.config();
 
-const app = express();
 const port = process.env.PORT || 5000;
 
 // Configuração do CORS
@@ -21,12 +21,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', 'https://pontodigital-cogna.vercel.app');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  next();
-});
 
 // Conexão com o MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
@@ -192,42 +186,67 @@ app.get('/extrair-relatorio', async (req, res) => {
           const horas = Math.floor(diferencaMinutos / 60);
           const minutos = diferencaMinutos % 60;
 
-          duracao = `${horas} Horas e ${minutos} Minutos`;
-        } else {
-          duracao = 'Horário inválido';
+          duracao = `${horas}h ${minutos}m`;
         }
       }
 
       return {
-        "Nome": log.id,
-        "E-mail": log.email,
-        "Disciplina": log.disciplina,
-        "Dia da semana": log.dia,
-        "Data": log.data,
-        "Inicio": log.horario_inicio || 'N/A',
-        "Fim": log.horario_fim || 'N/A',
-        "Status": log.status,
-        "Duração (horas)": duracao
+        aula_id: log.aula_id,
+        id: log.id,
+        email: log.email,
+        disciplina: log.disciplina,
+        dia: log.dia,
+        data: log.data,
+        horario_inicio: log.horario_inicio,
+        horario_fim: log.horario_fim,
+        status: log.status,
+        duracao,
       };
     });
 
-    const workbook = xlsx.utils.book_new();
-    const worksheet = xlsx.utils.json_to_sheet(data);
+    const workbook = xlsx.createWorkbook();
+    const worksheet = workbook.addWorksheet('Relatório de Logs');
 
-    xlsx.utils.book_append_sheet(workbook, worksheet, 'Logs');
+    worksheet.addRow([
+      'Aula ID',
+      'ID',
+      'Email',
+      'Disciplina',
+      'Dia',
+      'Data',
+      'Horário Início',
+      'Horário Fim',
+      'Status',
+      'Duração',
+    ]);
 
-    const buffer = xlsx.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    data.forEach(log => {
+      worksheet.addRow([
+        log.aula_id,
+        log.id,
+        log.email,
+        log.disciplina,
+        log.dia,
+        log.data,
+        log.horario_inicio,
+        log.horario_fim,
+        log.status,
+        log.duracao,
+      ]);
+    });
 
-    res.setHeader('Content-Disposition', 'attachment; filename=relatorio_logs.xlsx');
+    const buffer = xlsx.write(workbook, { bookType: 'xlsx', type: 'buffer' });
+
+    res.status(200).json({ message: 'Relatório de logs gerado com sucesso!' });
+    res.setHeader('Content-Disposition', 'attachment; filename="relatorio_logs.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-
     res.send(buffer);
   } catch (error) {
-    console.error('Generate report error:', error);
-    res.status(500).json({ message: 'Erro ao gerar relatório', error: error.message });
+    console.error('Get relatorio error:', error);
+    res.status(500).json({ message: 'Erro no servidor', error: error.message });
   }
 });
 
 app.listen(port, () => {
-  console.log(`Server is running on http://localhost:${port}`);
+  console.log(`Server started on port ${port}`);
 });
