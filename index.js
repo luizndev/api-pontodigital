@@ -14,14 +14,19 @@ const port = process.env.PORT || 5000;
 
 // Configuração do CORS
 const corsOptions = {
-  origin: 'https://pontodigital-cogna.vercel.app',
+  origin: 'https://pontodigital-cogna.vercel.app', // Permitir apenas esse domínio
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true,
 };
 
 app.use(cors(corsOptions));
 app.use(bodyParser.json());
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', 'https://pontodigital-cogna.vercel.app');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  next();
+});
 
 // Conexão com o MongoDB
 mongoose.connect(process.env.MONGODB_URI, {
