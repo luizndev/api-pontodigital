@@ -12,21 +12,17 @@ dotenv.config();
 
 const port = process.env.PORT || 5000;
 
-// Configuração do CORS
-const corsOptions = {
-  origin: 'https://pontodigital-cogna.vercel.app', // Permitir apenas esse domínio
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-};
+app.use(cors()); // Permite todas as origens e métodos
 
-app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
-// Conexão com o MongoDB
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
+// Conexão com o MongoDB usando variáveis do .env
+const mongoUser = process.env.MONGO_USER;
+const mongoPass = process.env.MONGO_PASS;
+const mongoDB = process.env.MONGO_DATABASE;
+const mongoClusterUrl = process.env.MONGO_CLUSTER_URL;
+
+mongoose.connect(`mongodb+srv://${mongoUser}:${mongoPass}@${mongoClusterUrl}/${mongoDB}?retryWrites=true&w=majority`)
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error('MongoDB connection error:', err));
 
@@ -118,7 +114,6 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// Atualizar informações do usuário
 app.put('/user', async (req, res) => {
   const { email, cargo, curso, city } = req.body;
 
@@ -141,7 +136,6 @@ app.put('/user', async (req, res) => {
   }
 });
 
-// Obter disciplinas do usuário
 app.get('/disciplinas', async (req, res) => {
   const { email } = req.query;
 
@@ -159,6 +153,110 @@ app.get('/disciplinas', async (req, res) => {
   } catch (error) {
     console.error('Get disciplinas error:', error);
     res.status(500).json({ message: 'Erro no servidor', error: error.message });
+  }
+});
+
+// Rota para obter logs em andamento
+app.get('/logs', async (req, res) => {
+  const { email } = req.query;
+
+  if (!email) {
+    return res.status(400).json({ message: 'O e-mail é obrigatório!' });
+  }
+
+  try {
+    const logsEmAndamento = await Log.find({ email, status: 'Em Andamento' });
+    res.status(200).json(logsEmAndamento);
+  } catch (error) {
+    console.error('Erro ao obter logs:', error);
+    res.status(500).json({ message: 'Erro no servidor' });
+  }
+});
+
+// Rota para atualizar um log
+app.put('/logs', async (req, res) => {
+  const { email, aula_id, horario_fim, data, status } = req.body;
+
+  if (!email || !aula_id || !horario_fim || !data || !status) {
+    return res.status(400).json({ message: 'O e-mail, o ID da aula, o horário de fim, a data e o status são obrigatórios!' });
+  }
+
+  try {
+    const log = await Log.findOne({ email, aula_id });
+
+    if (!log) {
+      return res.status(404).json({ message: 'Log não encontrado!' });
+    }
+
+    if (!log.horario_inicio) {
+      return res.status(400).json({ message: 'O horário de início não foi encontrado no log!' });
+    }
+
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    if (hoje !== data) {
+      return res.status(400).json({ message: 'A data fornecida não corresponde à data de hoje!' });
+    }
+
+    log.horario_fim = horario_fim;
+
+    const inicio = new Date(`1970-01-01T${log.horario_inicio}:00`);
+    const fim = new Date(`1970-01-01T${horario_fim}:00`);
+    const duracao = (fim - inicio) / (1000 * 60 * 60);
+
+    log.duracao = duracao.toFixed(2);
+    log.status = status;
+
+    await log.save();
+
+    res.status(200).json({ message: 'Log atualizado com sucesso!', log });
+  } catch (error) {
+    console.error('Erro ao atualizar log:', error);
+    res.status(500).json({ message: 'Erro no servidor' });
+  }
+});
+
+// Rota para criar um novo log
+app.post('/logs', async (req, res) => {
+  const { id, email, disciplina, dia, data, horario_inicio, horario_fim, status } = req.body;
+
+  if (!id || !email || !disciplina || !dia || !data || !horario_inicio) {
+    return res.status(400).json({ message: 'Campos obrigatórios ausentes!' });
+  }
+
+  const dataRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+  if (!dataRegex.test(data)) {
+    return res.status(400).json({ message: 'Data deve estar no formato DD/MM/YYYY!' });
+  }
+
+  try {
+    const usuario = await User.findOne({ email });
+
+    if (!usuario) {
+      return res.status(404).json({ message: 'Usuário não encontrado!' });
+    }
+
+    const aulaId = `${id}-${new Date().getTime()}`;
+
+    const newLog = new Log({
+      aula_id: aulaId,
+      id,
+      email,
+      disciplina,
+      dia,
+      data,
+      horario_inicio,
+      horario_fim: horario_fim || '',  
+      status: status || 'Em Andamento',
+      city: usuario.city, 
+      timestamp: new Date().toISOString()
+    });
+
+    await newLog.save();
+
+    res.status(201).json({ message: 'Log registrado com sucesso!', aula_id: aulaId });
+  } catch (error) {
+    console.error('Erro ao registrar log:', error);
+    res.status(500).json({ message: 'Erro no servidor' });
   }
 });
 
@@ -204,10 +302,11 @@ app.get('/extrair-relatorio', async (req, res) => {
       };
     });
 
-    const workbook = xlsx.createWorkbook();
-    const worksheet = workbook.addWorksheet('Relatório de Logs');
+    const workbook = xlsx.utils.book_new(); // Cria um novo workbook
+    const worksheet = xlsx.utils.json_to_sheet([]); // Inicializa a worksheet
 
-    worksheet.addRow([
+    // Adiciona o cabeçalho
+    xlsx.utils.sheet_add_aoa(worksheet, [[
       'Aula ID',
       'ID',
       'Email',
@@ -218,10 +317,11 @@ app.get('/extrair-relatorio', async (req, res) => {
       'Horário Fim',
       'Status',
       'Duração',
-    ]);
+    ]]);
 
+    // Adiciona as linhas com os dados dos logs
     data.forEach(log => {
-      worksheet.addRow([
+      xlsx.utils.sheet_add_aoa(worksheet, [[
         log.aula_id,
         log.id,
         log.email,
@@ -232,20 +332,97 @@ app.get('/extrair-relatorio', async (req, res) => {
         log.horario_fim,
         log.status,
         log.duracao,
-      ]);
+      ]], { origin: -1 });
     });
+
+    xlsx.utils.book_append_sheet(workbook, worksheet, 'Relatório de Logs');
 
     const buffer = xlsx.write(workbook, { bookType: 'xlsx', type: 'buffer' });
 
-    res.status(200).json({ message: 'Relatório de logs gerado com sucesso!' });
+    // Definindo cabeçalhos para download do arquivo
     res.setHeader('Content-Disposition', 'attachment; filename="relatorio_logs.xlsx"');
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    // Enviando o arquivo Excel
     res.send(buffer);
   } catch (error) {
     console.error('Get relatorio error:', error);
     res.status(500).json({ message: 'Erro no servidor', error: error.message });
   }
 });
+
+
+app.get('/user', async (req, res) => {
+  const { email } = req.query;
+  console.log('Get user request received:', { email });
+
+  try {
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado!' });
+    }
+
+    res.status(200).json({
+      username: user.username,
+      cargo: user.cargo,
+      role: user.role,
+      curso: user.curso,
+      disciplinas: user.disciplinas
+    });
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ message: 'Erro no servidor', error: error.message });
+  }
+});
+
+app.delete('/delete/disciplina', async (req, res) => {
+  const { email, nome } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado!' });
+    }
+
+    user.disciplinas = user.disciplinas.filter(disciplina => disciplina.nome !== nome);
+    await user.save();
+
+    res.status(200).json({ message: 'Disciplina excluída com sucesso!', user });
+  } catch (error) {
+    console.error('Erro ao excluir disciplina:', error);
+    res.status(500).json({ message: 'Erro no servidor', error: error.message });
+  }
+});
+
+app.post('/add/disciplina', async (req, res) => {
+  const { email, nome, dia, horarioInicio, horarioFim } = req.body;
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: 'Usuário não encontrado!' });
+    }
+
+    const novaDisciplina = {
+      nome,
+      dia_da_semana: dia,
+      horario_inicio: horarioInicio,
+      horario_fim: horarioFim
+    };
+
+    user.disciplinas.push(novaDisciplina);
+    await user.save();
+
+    res.status(201).json({ message: 'Disciplina adicionada com sucesso!', user });
+  } catch (error) {
+    console.error('Erro ao adicionar disciplina:', error);
+    res.status(500).json({ message: 'Erro no servidor', error: error.message });
+  }
+});
+
+
+
 
 app.listen(port, () => {
   console.log(`Server started on port ${port}`);
